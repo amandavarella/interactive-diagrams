@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OAuth 2.0 + OIDC: Step-by-step explorer</title>
+<style>
+:root { color-scheme: light; --accent:#2563eb; --accent-soft:#eff6ff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --bg:#f8fafc; }
+body.oidc { --accent:#059669; --accent-soft:#ecfdf5; }
+* { box-sizing:border-box; }
+body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+header { padding:16px 20px 12px; background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+h1 { font-size:18px; margin:0 0 4px; }
+.sub { color:var(--muted); font-size:13px; margin:0 0 12px; }
+.bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.toggle { display:inline-flex; background:#f1f5f9; border-radius:10px; padding:3px; }
+.toggle button { border:0; background:transparent; padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; color:var(--muted); font-weight:600; }
+.toggle button.on { background:#fff; color:var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.12); }
+.ctrl button { border:1px solid var(--line); background:#fff; padding:7px 11px; border-radius:8px; font-size:13px; cursor:pointer; }
+.ctrl button:hover { border-color:var(--accent); color:var(--accent); }
+.ctrl button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.progress { flex:1; min-width:120px; height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden; }
+.progress div { height:100%; background:var(--accent); transition:width .3s; }
+.hint { font-size:12px; color:var(--muted); }
+main { display:grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap:16px; padding:16px 20px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } .detail { order:-1; } .holders { order:-1; } }
+@media (min-width: 901px) { .detail { position:sticky; top:150px; align-self:start; max-height:calc(100vh - 170px); overflow:auto; } }
+.card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; }
+.card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px; }
+svg { width:100%; height:auto; display:block; }
+.row { cursor:pointer; }
+.row .hit { fill:transparent; }
+.row:hover .hit { fill:#f1f5f9; }
+.row.cur .hit { fill:var(--accent-soft); }
+.row.future { opacity:.28; }
+.row.cur line, .row.cur path { stroke-width:2.6; }
+.lbl { font-size:11.5px; paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round; }
+.row.cur .lbl { font-weight:700; }
+.row.cur .hit + * { }
+.detail .step-head { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+.big { font-size:30px; }
+.num { background:var(--accent); color:#fff; font-weight:700; font-size:12px; border-radius:20px; padding:2px 9px; }
+.detail h3 { margin:2px 0 0; font-size:17px; }
+.flow { font-size:12.5px; color:var(--muted); }
+.what { font-size:14px; line-height:1.55; }
+.why { background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:8px; padding:9px 12px; font-size:13.5px; line-height:1.5; margin:10px 0; }
+pre { background:#0f172a; color:#e2e8f0; border-radius:10px; padding:12px; font-size:12px; line-height:1.5; overflow-x:auto; white-space:pre; margin:10px 0 0; }
+.special { margin-top:10px; }
+.consent { border:1px solid var(--line); border-radius:12px; padding:14px; max-width:360px; box-shadow:0 2px 10px rgba(0,0,0,.06); font-size:13px; }
+.consent .g { font-weight:700; margin-bottom:6px; }
+.consent ul { padding-left:0; list-style:none; margin:8px 0; }
+.consent li { margin:5px 0; }
+.consent .btns { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+.consent .btns span { padding:6px 12px; border-radius:6px; border:1px solid var(--line); }
+.consent .btns span.allow { background:#1a73e8; color:#fff; border-color:#1a73e8; }
+.jwt { font-family: ui-monospace, Menlo, monospace; font-size:12px; word-break:break-all; background:#f8fafc; border:1px solid var(--line); padding:10px; border-radius:8px; }
+.jwt .h { color:#dc2626; } .jwt .p { color:#7c3aed; } .jwt .s { color:#0891b2; }
+.jwtparts { display:grid; grid-template-columns:1fr; gap:8px; margin-top:8px; }
+.jwtparts div { border-radius:8px; padding:8px 10px; font-size:12px; }
+.jwtparts .h { background:#fef2f2; } .jwtparts .p { background:#f5f3ff; } .jwtparts .s { background:#ecfeff; }
+.jwtparts pre { margin:4px 0 0; background:transparent; color:#111827; padding:0; }
+.checks { list-style:none; padding:0; margin:0; }
+.checks li { display:flex; gap:8px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; margin:6px 0; font-size:13px; opacity:0; transform:translateY(4px); animation:pop .35s forwards; }
+.checks li b { min-width:78px; }
+@keyframes pop { to { opacity:1; transform:none; } }
+.compare { display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:center; font-size:12.5px; }
+.compare .box { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:8px; font-family:ui-monospace,Menlo,monospace; word-break:break-all; }
+.compare .eq { font-size:20px; }
+.holders { grid-column:1 / -1; }
+.hold-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; }
+@media (max-width: 700px) { .hold-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+.actor { border:1px solid var(--line); border-radius:12px; padding:10px; min-height:110px; }
+.actor.active { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+.actor .name { font-weight:700; font-size:13px; margin-bottom:8px; }
+.actor .role { font-weight:400; color:var(--muted); font-size:11.5px; display:block; }
+.chip { display:inline-flex; align-items:center; gap:5px; background:#f1f5f9; border-radius:20px; padding:4px 9px; font-size:12px; margin:3px 3px 0 0; cursor:help; }
+.chip.new { background:var(--accent); color:#fff; animation:pulse 1.2s ease-out 2; }
+.chip.warn { background:#fef3c7; }
+@keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(37,99,235,.5);} 100% { box-shadow:0 0 0 10px rgba(37,99,235,0);} }
+.empty { color:#cbd5e1; font-size:12px; }
+.legend { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
+.legend .card { font-size:13px; line-height:1.5; }
+.legend .card b { font-size:14px; }
+footer { padding:0 20px 20px; font-size:11.5px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔐 OAuth 2.0 + OIDC: click through every step</h1>
+  <p class="sub">Scenario: 👩 Amanda clicks <b>"Connect Google Calendar"</b> in 💬 Slack. Example values are made up for illustration. Formats follow RFC 6749, RFC 7636 (PKCE), and OpenID Connect Core 1.0.</p>
+  <div class="bar">
+    <div class="toggle">
+      <button id="m-oauth" class="on">🔑 OAuth 2.0 + PKCE<br><small style="font-weight:400">"What can Slack touch?"</small></button>
+      <button id="m-oidc">🪪 OIDC (OAuth + identity)<br><small style="font-weight:400">"Who signed in?"</small></button>
+    </div>
+    <div class="ctrl">
+      <button id="prev">◀ Back</button>
+      <button id="next" class="primary">Next ▶</button>
+      <button id="play">▶️ Auto-play</button>
+      <button id="reset">↺</button>
+    </div>
+    <div class="progress"><div id="pbar"></div></div>
+    <span class="hint">Tip: click any arrow, or use ← → keys</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Sequence diagram</h2>
+    <svg id="diagram"></svg>
+  </section>
+  <section class="card detail" id="detail"></section>
+
+  <section class="card holders">
+    <h2>🎒 Who holds what (after this step)</h2>
+    <div class="hold-grid" id="holders"></div>
+  </section>
+
+  <div class="legend">
+    <div class="card"><b>🔑 access_token</b><br>Answers <i>"what can you touch?"</i>. Slack sends it to the <b>Calendar API</b>. Slack shouldn't use it as proof of who you are.</div>
+    <div class="card"><b>🪪 id_token</b> (OIDC only)<br>Answers <i>"who are you?"</i>. A signed JWT that <b>stays with Slack</b>. Slack shouldn't send it to APIs.</div>
+    <div class="card"><b>🙈 Your password</b><br>Typed only on Google's page. Slack never sees it at any step. Watch the holder cards to confirm.</div>
+  </div>
+</main>
+<footer>Endpoint URLs and scope names reflect Google's documented values as of mid-2026 and are not live-checked. Codes, tokens, and IDs are fake.</footer>
+
+<script>
+const ACTORS = [
+  { k:'b', e:'🌐', n:'Browser', r:"Amanda's Chrome" },
+  { k:'s', e:'💬', n:'Slack', r:'Client App' },
+  { k:'g', e:'🔐', n:'Google', r:'Auth Server / OpenID Provider' },
+  { k:'a', e:'📅', n:'Calendar API', r:'Protected Resource' },
+];
+const X = { b:70, s:215, g:365, a:510 };
+
+const ITEMS = {
+  state:    { e:'🎲', n:'state', v:'xY7kPq2LmN9vR4tB', d:'Random value to block CSRF' },
+  verifier: { e:'🤫', n:'code_verifier', v:'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk', d:'PKCE secret. Stays on Slack until the code exchange' },
+  challenge:{ e:'🔒', n:'code_challenge', v:'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM', d:'SHA-256 hash of the verifier. Safe to share' },
+  nonce:    { e:'🔢', n:'nonce', v:'n-0S6_WzA2Mj', d:'Random value to block ID-token replay' },
+  pwd:      { e:'🙈', n:'your password', v:'(typed on accounts.google.com only)', d:'Never leaves Google' },
+  consent:  { e:'✅', n:'consent record', v:'Slack → calendar.readonly', d:'Google remembers what you approved' },
+  code:     { e:'🎟️', n:'auth code', v:'4/0AeanS0Zx9kL...q8w', d:'One-time ticket, expires in minutes' },
+  access:   { e:'🔑', n:'access_token', v:'ya29.a0AfB_byC3x...Kq0171', d:'Key to the calendar, ~1 hour' },
+  refresh:  { e:'♻️', n:'refresh_token', v:'1//0gLx8...vT4', d:'Gets new access tokens without asking you again' },
+  idtoken:  { e:'🪪', n:'id_token (JWT)', v:'eyJhbGciOiJSUzI1NiIs...', d:'Signed proof of who signed in' },
+  events:   { e:'🗓️', n:'calendar events', v:'Sprint planning, 1:1 with Jordan', d:'The data Slack wanted' },
+  identity: { e:'👤', n:'verified identity', v:'sub=110248495921238986420, amanda@example.com', d:'Slack now knows who you are' },
+  cookie:   { e:'🍪', n:'Slack session cookie', v:'slack_session=new_xyz789', d:'You are signed in to Slack' },
+};
+
+const consentHTML = (oidc) => `
+  <div class="consent">
+    <div class="g">🔐 Google</div>
+    <div><b>Slack</b> wants to access your Google Account</div>
+    <div style="color:#6b7280">amanda@example.com</div>
+    <div style="margin-top:8px">This will allow Slack to:</div>
+    <ul>
+      ${oidc ? '<li>👤 Associate you with your personal info on Google</li><li>📧 See your primary Google Account email address</li>' : ''}
+      <li>📅 See and download any calendar you can access</li>
+    </ul>
+    <div class="btns"><span>Cancel</span><span class="allow">Allow</span></div>
+  </div>`;
+
+function oauthSteps(oidc) {
+  const scope = oidc ? 'openid email profile https://www.googleapis.com/auth/calendar.readonly'
+                     : 'https://www.googleapis.com/auth/calendar.readonly';
+  return [
+    { f:'s', t:'s', lbl: oidc ? 'Generate state + nonce + PKCE' : 'Generate state + PKCE', e:'🎲',
+      title:'Slack prepares secrets',
+      what:`As soon as the click arrives, and before sending Amanda anywhere, Slack creates random values and stores them in her session on Slack's server. ${oidc ? 'In OIDC mode, it also creates a <b>nonce</b>.' : ''}`,
+      why:`🎲 <b>state</b> blocks CSRF. 🤫 <b>code_verifier</b> is a secret only Slack knows. 🔒 <b>code_challenge</b> is its hash, so it can travel through the browser safely.${oidc ? ' 🔢 <b>nonce</b> will come back inside the ID token to prove it is fresh.' : ''}`,
+      code:`state          = "xY7kPq2LmN9vR4tB"
+code_verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+code_challenge = BASE64URL(SHA256(code_verifier))
+               = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"${oidc ? '\nnonce          = "n-0S6_WzA2Mj"' : ''}`,
+      adds:{ s: oidc ? ['state','verifier','challenge','nonce'] : ['state','verifier','challenge'] } },
+
+    { f:'b', t:'s', lbl: oidc ? 'User clicks Sign in' : 'User opens protected feature', e:'👆',
+      title: oidc ? 'Amanda clicks "Sign in with Google"' : 'Amanda clicks "Connect Google Calendar"',
+      what:'The browser sends a normal request to Slack. Slack sees it has no Google access for Amanda yet.',
+      why:'Everything starts from the client app. Slack decides it needs Google before it can continue.',
+      code:`GET /integrations/google-calendar/connect HTTP/1.1
+Host: app.slack.com
+Cookie: slack_session=abc123`, adds:{} },
+
+    { f:'s', t:'b', dash:true, lbl: oidc ? '302 redirect to OpenID Provider' : '302 redirect to Auth Server', e:'↪️',
+      title:'Slack redirects the browser to Google',
+      what:`Slack replies with a <b>302 redirect</b>. The URL carries the client ID, the requested scope, the state, and the code_challenge${oidc ? ', and the nonce' : ''}. The <b>verifier stays on Slack</b>.`,
+      why: oidc ? 'The <b>openid</b> scope is the switch that turns a plain OAuth request into an OIDC request.' : 'Only the <i>hash</i> of the PKCE secret goes out. Anyone who sees this URL still can\'t finish the flow.',
+      code:`HTTP/1.1 302 Found
+Location: https://accounts.google.com/o/oauth2/v2/auth
+  ?response_type=code
+  &client_id=123456-slack.apps.googleusercontent.com
+  &redirect_uri=https://app.slack.com/oauth/google/callback
+  &scope=${scope}
+  &state=xY7kPq2LmN9vR4tB
+  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+  &code_challenge_method=S256${oidc ? '\n  &nonce=n-0S6_WzA2Mj' : ''}
+  &access_type=offline`,
+      adds:{ b: oidc ? ['state','challenge','nonce'] : ['state','challenge'] } },
+
+    { f:'b', t:'g', lbl: oidc ? 'OIDC authorization request' : 'Authorization request', e:'📨',
+      title:'Browser sends the authorization request to Google',
+      what:'The browser follows the redirect. Google now knows which app is asking and what it wants, but it doesn\'t have Amanda\'s approval yet.',
+      why:'Google stores the code_challenge so it can check it later in the code exchange.',
+      code:`GET /o/oauth2/v2/auth?response_type=code
+    &client_id=123456-slack...&scope=${oidc ? 'openid%20email%20...' : '...calendar.readonly'}
+    &state=xY7kPq2LmN9vR4tB&code_challenge=E9Mel...${oidc ? '&nonce=n-0S6_WzA2Mj' : ''} HTTP/1.1
+Host: accounts.google.com`,
+      adds:{ g: oidc ? ['state','challenge','nonce'] : ['state','challenge'] } },
+
+    { f:'g', t:'g', lbl:'User authentication + consent', e:'🙋',
+      title:'Amanda logs in to Google and approves',
+      what:'All of this happens <b>on Google\'s domain</b>. Amanda types her password (and 2FA) there, then sees the consent screen and clicks <b>Allow</b>.',
+      why:'🙈 This is why OAuth exists: Slack never sees the password. Check the holder cards below. The password appears only under Google.',
+      special:()=>consentHTML(oidc), adds:{ g:['pwd','consent'] } },
+
+    { f:'g', t:'b', dash:true, lbl:'Redirect with code + state', e:'🎟️',
+      title:'Google redirects back with a one-time code',
+      what:'Google sends the browser back to Slack\'s <b>redirect_uri</b> with an authorization <b>code</b> and the same <b>state</b>.',
+      why:'The code is short-lived and single-use. On its own it\'s useless, because redeeming it needs the code_verifier, which only Slack holds.',
+      code:`HTTP/1.1 302 Found
+Location: https://app.slack.com/oauth/google/callback
+  ?code=4/0AeanS0Zx9kL...q8w
+  &state=xY7kPq2LmN9vR4tB`,
+      adds:{ b:['code'] } },
+
+    { f:'b', t:'s', lbl:'Browser calls redirect_uri (code + state)', e:'📬',
+      title:'Browser delivers the code to Slack',
+      what:'The browser follows the redirect to Slack\'s callback URL. Slack now has the code.',
+      why:'The code passed through the browser, which is a less trusted place. That\'s why tokens are never sent this way, only a one-time code.',
+      code:`GET /oauth/google/callback?code=4/0AeanS0Zx9kL...q8w&state=xY7kPq2LmN9vR4tB HTTP/1.1
+Host: app.slack.com
+Cookie: slack_session=abc123`,
+      adds:{ s:['code'] } },
+
+    { f:'s', t:'s', lbl:'Validate state', e:'🛡️',
+      title:'Slack checks that the state matches',
+      what:'Slack compares the state in the URL with the state it saved in Step 1b.',
+      why:'A mismatch means someone may be injecting their own code into Amanda\'s session (CSRF). Slack would stop here.',
+      special:()=>`<div class="compare"><div class="box">🎲 URL<br>xY7kPq2LmN9vR4tB</div><div class="eq">✅</div><div class="box">🎲 Session<br>xY7kPq2LmN9vR4tB</div></div>`,
+      adds:{} },
+
+    { f:'s', t:'g', lbl:'Code exchange (+ code_verifier)', e:'🔁',
+      title:'Slack swaps the code for tokens (server to server)',
+      what:'Slack calls Google directly, with no browser involved. It sends the code, its client secret, and the <b>code_verifier</b>.',
+      why:'Google hashes the verifier and compares it with the challenge from Step 3. If they match, the party finishing the flow is the one that started it.',
+      code:`POST /token HTTP/1.1
+Host: oauth2.googleapis.com
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+&code=4/0AeanS0Zx9kL...q8w
+&redirect_uri=https://app.slack.com/oauth/google/callback
+&client_id=123456-slack.apps.googleusercontent.com
+&client_secret=GOCSPX-fakeSecret123
+&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk`,
+      special:()=>`<div class="compare"><div class="box">SHA256(🤫 verifier)<br>E9Melhoa2Owv...</div><div class="eq">✅</div><div class="box">🔒 challenge (Step 3)<br>E9Melhoa2Owv...</div></div>`,
+      adds:{ g:['verifier','code'] } },
+
+    oidc ? {
+      f:'g', t:'s', dash:true, lbl:'Token response: id_token + access_token', e:'🪪',
+      title:'Google returns tokens, including the ID token',
+      what:'Same response as OAuth, plus an <b>id_token</b>: a signed JWT that says who signed in. Click through the three parts below.',
+      why:'<b>sub</b> is Amanda\'s permanent Google ID. Slack should link accounts by sub, not by email, because emails can change.',
+      code:`{
+  "access_token": "ya29.a0AfB_byC3x...Kq0171",
+  "id_token": "eyJhbGciOiJSUzI1NiIs...",
+  "expires_in": 3599,
+  "refresh_token": "1//0gLx8...vT4",
+  "scope": "openid email profile https://www.googleapis.com/auth/calendar.readonly",
+  "token_type": "Bearer"
+}`,
+      special:()=>`<div class="jwt"><span class="h">eyJhbGciOiJSUzI1NiIsImtpZCI6ImFiYzEyMyJ9</span>.<span class="p">eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20i...</span>.<span class="s">SflKxwRJSMeKKF2QT4fwpM...</span></div>
+        <div class="jwtparts">
+          <div class="h"><b>🟥 Header</b><pre>{ "alg": "RS256", "kid": "abc123", "typ": "JWT" }</pre></div>
+          <div class="p"><b>🟪 Payload (claims)</b><pre>{
+  "iss": "https://accounts.google.com",
+  "aud": "123456-slack.apps.googleusercontent.com",
+  "sub": "110248495921238986420",
+  "email": "amanda@example.com",
+  "email_verified": true,
+  "name": "Amanda Varella",
+  "nonce": "n-0S6_WzA2Mj",
+  "iat": 1793005200,
+  "exp": 1793008800
+}</pre></div>
+          <div class="s"><b>🟦 Signature</b><br>Google signs header + payload with its private key. Anyone can verify it with Google's public key.</div>
+        </div>`,
+      adds:{ s:['access','refresh','idtoken'] } }
+    : {
+      f:'g', t:'s', dash:true, lbl:'Token response: access_token', e:'🔑',
+      title:'Google returns the access token',
+      what:'Google sends back an <b>access_token</b> (valid about 1 hour) and a <b>refresh_token</b> (because Slack asked for offline access).',
+      why:'Slack now holds a key to Amanda\'s calendar, but it still has <b>no idea who Amanda is</b>. That gap is what OIDC fills. Switch modes at the top to see it.',
+      code:`{
+  "access_token": "ya29.a0AfB_byC3x...Kq0171",
+  "expires_in": 3599,
+  "refresh_token": "1//0gLx8...vT4",
+  "scope": "https://www.googleapis.com/auth/calendar.readonly",
+  "token_type": "Bearer"
+}`,
+      adds:{ s:['access','refresh'] } },
+  ];
+}
+
+const OAUTH_END = [
+  { f:'s', t:'a', lbl:'App call with Bearer token', e:'📡',
+    title:'Slack calls the Calendar API',
+    what:'Slack puts the access token in the <b>Authorization</b> header. The API checks the token is valid, unexpired, and includes the calendar.readonly scope.',
+    why:'The API never asks for a password or a username. The token alone carries the permission.',
+    code:`GET /calendar/v3/calendars/primary/events?timeMin=2026-10-26T00:00:00Z&maxResults=2 HTTP/1.1
+Host: www.googleapis.com
+Authorization: Bearer ya29.a0AfB_byC3x...Kq0171`,
+    adds:{ a:['access'] } },
+  { f:'a', t:'s', dash:true, lbl:'Calendar events', e:'🗓️',
+    title:'The API returns Amanda\'s events',
+    what:'Token accepted. Slack gets the events and can post them in the channel. ✨',
+    why:'Done: Slack can read the calendar without ever knowing Amanda\'s Google password.',
+    code:`{
+  "kind": "calendar#events",
+  "items": [
+    { "summary": "Sprint planning", "start": { "dateTime": "2026-10-26T10:00:00+11:00" } },
+    { "summary": "1:1 with Jordan", "start": { "dateTime": "2026-10-26T14:30:00+11:00" } }
+  ]
+}`,
+    adds:{ s:['events'] } },
+];
+
+const OIDC_END = [
+  { f:'s', t:'s', lbl:'Validate ID token', e:'🔍',
+    title:'Slack validates the ID token',
+    what:'Before trusting anything in the token, Slack runs five checks.',
+    why:'If any check fails, Slack rejects the sign-in. Decoding a JWT is easy; <b>verifying</b> it is what makes it trustworthy.',
+    special:()=>`<ul class="checks">
+      <li style="animation-delay:.1s">✅ <b>Signature</b> Verified with Google's public key (kid: abc123)</li>
+      <li style="animation-delay:.4s">✅ <b>iss</b> = https://accounts.google.com</li>
+      <li style="animation-delay:.7s">✅ <b>aud</b> = Slack's client_id</li>
+      <li style="animation-delay:1.0s">✅ <b>exp</b> 1793008800 is in the future</li>
+      <li style="animation-delay:1.3s">✅ <b>nonce</b> = n-0S6_WzA2Mj (matches Step 1b)</li>
+    </ul>`,
+    adds:{ s:['identity'] } },
+  { f:'s', t:'b', dash:true, lbl:'Create session: user signed in', e:'🍪',
+    title:'Slack creates its own session. Amanda is signed in',
+    what:'Slack sets a session cookie and sends Amanda into the app. Slack now knows <b>who</b> she is (sub, email) and <b>what</b> it may touch (the calendar, through the access token).',
+    why:'From here on, Slack uses its own session cookie. It doesn\'t keep sending the ID token around.',
+    code:`HTTP/1.1 302 Found
+Location: https://app.slack.com/client/T0123/C0456
+Set-Cookie: slack_session=new_xyz789; HttpOnly; Secure; SameSite=Lax`,
+    adds:{ b:['cookie'] } },
+];
+
+function build(oidc, end) {
+  const s = oauthSteps(oidc);
+  [s[0], s[1]] = [s[1], s[0]];           // click first, then Slack prepares secrets
+  const all = [...s, ...end];
+  all.forEach((st, i) => st.n = i === 0 ? '1' : i === 1 ? '1b' : String(i));
+  return all;
+}
+const MODES = { oauth: build(false, OAUTH_END), oidc: build(true, OIDC_END) };
+
+let mode = 'oauth', cur = 0, timer = null;
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function drawDiagram() {
+  const steps = MODES[mode], top = 70, rh = 46, h = top + steps.length * rh + 20;
+  const svg = $('diagram');
+  svg.setAttribute('viewBox', `0 0 580 ${h}`);
+  let s = `<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker>
+    <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker></defs>`;
+  ACTORS.forEach(a => {
+    const dim = (mode === 'oidc' && a.k === 'a') ? ' opacity=".3"' : '';
+    s += `<g${dim}><line x1="${X[a.k]}" y1="52" x2="${X[a.k]}" y2="${h-10}" stroke="#cbd5e1" stroke-dasharray="3 4"/>
+      <rect x="${X[a.k]-58}" y="6" width="116" height="44" rx="10" fill="#fff" stroke="#cbd5e1"/>
+      <text x="${X[a.k]}" y="26" text-anchor="middle" font-size="16">${a.e}</text>
+      <text x="${X[a.k]}" y="43" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)">${a.n}</text></g>`;
+  });
+  steps.forEach((st, i) => {
+    const y = top + i * rh + 26;
+    const cls = i === cur ? 'cur' : (i > cur ? 'future' : '');
+    const col = i === cur ? 'var(--accent)' : 'var(--ink)';
+    const mk = i === cur ? 'url(#ahc)' : 'url(#ah)';
+    s += `<g class="row ${cls}" data-i="${i}"><rect class="hit" x="0" y="${y-26}" width="580" height="${rh}" rx="8"/>
+      <circle cx="16" cy="${y-6}" r="10" fill="${i===cur?'var(--accent)':'#e2e8f0'}"/>
+      <text x="16" y="${y-2}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${i===cur?'#fff':'#334155'}">${st.n}</text>`;
+    if (st.f === st.t) {
+      const x = X[st.f], w = Math.max(150, st.lbl.length * 6.6 + 30);
+      s += `<rect x="${x - w/2}" y="${y-20}" width="${w}" height="26" rx="13" fill="${i===cur?'var(--accent-soft)':'#fff'}" stroke="${col}" stroke-width="${i===cur?2:1.2}"/>
+        <text class="lbl" x="${x}" y="${y-3}" text-anchor="middle" fill="${col}">${st.e} ${esc(st.lbl)}</text>`;
+    } else {
+      const x1 = X[st.f], x2 = X[st.t], dir = x2 > x1 ? 1 : -1;
+      s += `<line x1="${x1 + dir*4}" y1="${y}" x2="${x2 - dir*4}" y2="${y}" stroke="${col}" stroke-width="1.6" ${st.dash?'stroke-dasharray="6 4"':''} marker-end="${mk}"/>
+        <text class="lbl" x="${(x1+x2)/2}" y="${y-8}" text-anchor="middle" fill="${col}">${st.e} ${esc(st.lbl)}</text>`;
+    }
+    s += `</g>`;
+  });
+  svg.innerHTML = s;
+  svg.querySelectorAll('.row').forEach(g => g.addEventListener('click', () => go(+g.dataset.i)));
+}
+
+function drawDetail() {
+  const st = MODES[mode][cur], name = k => ACTORS.find(a => a.k === k);
+  const from = name(st.f), to = name(st.t);
+  const flow = st.f === st.t ? `${from.e} ${from.n} (internal step)` : `${from.e} ${from.n} ${st.dash ? '⇠' : '→'} ${to.e} ${to.n}${st.dash ? ' (response)' : ''}`;
+  $('detail').innerHTML = `
+    <h2>Step details</h2>
+    <div class="step-head"><span class="big">${st.e}</span>
+      <div><span class="num">Step ${st.n}</span> <span class="flow">(${cur + 1} of ${MODES[mode].length})</span><h3>${st.title}</h3><div class="flow">${flow}</div></div></div>
+    <div class="what">${st.what}</div>
+    <div class="why">💡 ${st.why}</div>
+    ${st.special ? `<div class="special">${st.special()}</div>` : ''}
+    ${st.code ? `<pre>${esc(st.code)}</pre>` : ''}`;
+}
+
+function drawHolders() {
+  const steps = MODES[mode], held = { b:[], s:[], g:[], a:[] };
+  steps.slice(0, cur + 1).forEach((st, i) => {
+    Object.entries(st.adds || {}).forEach(([k, arr]) => arr.forEach(it => {
+      const ex = held[k].find(h => h.it === it);
+      if (ex) { if (i === cur) ex.isNew = true; } else held[k].push({ it, isNew: i === cur });
+    }));
+  });
+  const st = steps[cur];
+  $('holders').innerHTML = ACTORS.map(a => {
+    const active = a.k === st.f || a.k === st.t;
+    const chips = held[a.k].map(h => {
+      const I = ITEMS[h.it];
+      return `<span class="chip ${h.isNew ? 'new' : ''} ${h.it==='pwd' ? 'warn' : ''}" title="${esc(I.d)}: ${esc(I.v)}">${I.e} ${I.n}</span>`;
+    }).join('') || '<span class="empty">Nothing yet</span>';
+    return `<div class="actor ${active ? 'active' : ''}"><div class="name">${a.e} ${a.n}<span class="role">${a.r}</span></div>${chips}</div>`;
+  }).join('');
+}
+
+function render() {
+  drawDiagram(); drawDetail(); drawHolders();
+  $('pbar').style.width = (cur / (MODES[mode].length - 1) * 100) + '%';
+  $('prev').disabled = cur === 0;
+  $('next').textContent = cur === MODES[mode].length - 1 ? '✔ Done' : 'Next ▶';
+}
+function go(i) { cur = Math.max(0, Math.min(MODES[mode].length - 1, i)); render(); }
+function setMode(m) {
+  mode = m; cur = 0; stop();
+  document.body.classList.toggle('oidc', m === 'oidc');
+  $('m-oauth').classList.toggle('on', m === 'oauth');
+  $('m-oidc').classList.toggle('on', m === 'oidc');
+  render();
+}
+function stop() { clearInterval(timer); timer = null; $('play').textContent = '▶️ Auto-play'; }
+$('m-oauth').onclick = () => setMode('oauth');
+$('m-oidc').onclick = () => setMode('oidc');
+$('prev').onclick = () => { stop(); go(cur - 1); };
+$('next').onclick = () => { stop(); go(cur + 1); };
+$('reset').onclick = () => { stop(); go(0); };
+$('play').onclick = () => {
+  if (timer) return stop();
+  if (cur === MODES[mode].length - 1) go(0);
+  $('play').textContent = '⏸ Pause';
+  timer = setInterval(() => { if (cur >= MODES[mode].length - 1) return stop(); go(cur + 1); }, 4000);
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') { stop(); go(cur + 1); }
+  if (e.key === 'ArrowLeft') { stop(); go(cur - 1); }
+});
+render();
+</script>
+</body>
+</html>
